@@ -1,0 +1,35 @@
+# Informational checklist items for the PR review checklist bot (.github/workflows/pr_checklist.yaml).
+#
+# This file defines the non-blocking items only. The verification attestation (the merge gate)
+# is hardcoded in checklist-build-state/index.js and is not configurable here. Nothing in
+# `areas` can block merge. If dynamically blockable items are needed in the future, that can
+# be designed as a separate phase.
+#
+# No manual version field: checklist-build-state reads this file's git blob SHA from the
+# Contents API at build time and stamps it into the checklist state as `config_sha`.
+
+legend: "Check a box once done. If an item doesn't apply, edit its line to add a reason instead of checking it: `- [ ] item text — N/A: your reason`."
+
+reviewer_note: "Reviewers, consider the [code review guide](https://auntbertha.atlassian.net/wiki/spaces/EN/pages/4666851358/Code+Review+Guide) as you proceed."
+
+areas:
+  - id: general
+    items:
+      - id: tests-added
+        text: "Tests added for the change"
+        roles: [author]
+      - id: title-format
+        text: "PR title matches Conventional Commit + Jira ticket format"
+        roles: [author]
+      - id: ac-current
+        text: "AC in Jira is current"
+        roles: [author]
+      - id: title-desc-match
+        text: "PR title/description accurately reflects the diff"
+        roles: [reviewer]
+      - id: ac-match
+        text: "AC in Jira matches what was actually built"
+        roles: [reviewer]
+      - id: tests-edge-cases
+        text: "Tests exercise the stated edge cases, not just the happy path"
+        roles: [reviewer]

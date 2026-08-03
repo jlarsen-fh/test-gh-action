@@ -1,0 +1,44 @@
+name: "Checklist: build state"
+description: >-
+  Reads checklist_config.yaml from develop, reconciles the existing sticky comment's visible
+  checkbox state with the current config, and outputs the rendered comment body and gate status.
+
+inputs:
+  github-token:
+    description: "Token used for GitHub API calls."
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  skip:
+    description: "'true' if the comment should not be re-rendered this run (draft PR, bot self-edit, or non-checklist comment edit)."
+    value: ${{ steps.build.outputs.skip }}
+  is-draft:
+    description: "'true' if the PR is still a draft. The gate passes without checking attestation state."
+    value: ${{ steps.build.outputs.is-draft }}
+  comment-body:
+    description: "Fully rendered markdown body for the sticky checklist comment. Only set when skip is 'false'."
+    value: ${{ steps.build.outputs.comment-body }}
+  attestation-resolved:
+    description: "'true' if both the author and reviewer attestation items are Verified or Not Applicable."
+    value: ${{ steps.build.outputs.attestation-resolved }}
+
+runs:
+  using: "composite"
+  steps:
+    # actions/github-script cannot require() a third-party package without a prior install step.
+    # js-yaml is used to parse checklist_config.yaml; hand-rolling YAML parsing would risk
+    # silently corrupting the checklist definition on malformed input.
+    - name: Install js-yaml
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: npm install --no-save --ignore-scripts js-yaml@4.1.0
+
+    - name: Compute checklist state and render comment
+      id: build
+      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const build = require(`${{ github.action_path }}/index.js`);
+          await build({ github, context, core });
