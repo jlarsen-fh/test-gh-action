@@ -41,6 +41,28 @@ jobs:
     # head SHA from the last real run persists, so no action is needed for non-PR events.
     if: github.event_name == 'pull_request' || github.event.issue.pull_request != null
     steps:
+      - name: Set attestation status to pending
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const headSha = context.eventName === 'pull_request'
+              ? context.payload.pull_request.head.sha
+              : (await github.rest.pulls.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: context.payload.issue.number,
+                })).data.head.sha;
+
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: headSha,
+              state: 'pending',
+              description: 'Evaluating attestation state…',
+              context: 'Verification Attestation Complete',
+            });
+
       - name: Check out repo
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
 
