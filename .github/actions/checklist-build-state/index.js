@@ -86,6 +86,7 @@ const RECONCILED_ITEM_FIELDS = { text: "string", area: "string", blocking: "bool
  *   isChecklistEdit: boolean,
  *   overrideApplied: boolean,
  *   prAuthor: string,
+ *   prHeadSha: string,
  *   baseBranch: string,
  * }} DerivedContext
  *
@@ -116,7 +117,7 @@ module.exports = async ({ github, context, core }) => {
 
   if (derivedContext.isDraft) {
     core.info("PR is still a draft - not rendering yet.");
-    setOutputs(core, true, true, false);
+    setOutputs(core, true, true, false, derivedContext.prHeadSha);
     return;
   }
 
@@ -140,6 +141,7 @@ module.exports = async ({ github, context, core }) => {
     !render,
     false,
     attestationResolved,
+    derivedContext.prHeadSha,
     render ? renderComment(config, items, hiddenState, derivedContext) : undefined,
   );
 };
@@ -179,6 +181,7 @@ async function deriveAdditionalContext(github, context) {
     isCommentEvent,
     isChecklistEdit,
     overrideApplied: pull_request.labels.some((l) => l.name === OVERRIDE_LABEL),
+    prHeadSha: pull_request.head.sha,
     baseBranch: pull_request.base.ref,
   };
 }
@@ -191,9 +194,10 @@ async function deriveAdditionalContext(github, context) {
  * @param {boolean} skip - True if the comment should not be re-rendered this run
  * @param {boolean} isDraft - True if the PR is still a draft
  * @param {boolean} attestationResolved - True if both attestation items are resolved
+ * @param {string} headSha - The PR's head commit SHA
  * @param {string} [commentBody] - Rendered comment body; required when skip is false, must be absent otherwise
  */
-function setOutputs(core, skip, isDraft, attestationResolved, commentBody) {
+function setOutputs(core, skip, isDraft, attestationResolved, headSha, commentBody) {
   if (!skip && commentBody === undefined) {
     throw new Error("commentBody is required when skip is false");
   }
@@ -204,6 +208,7 @@ function setOutputs(core, skip, isDraft, attestationResolved, commentBody) {
   core.setOutput("skip", String(skip));
   core.setOutput("is-draft", String(isDraft));
   core.setOutput("attestation-resolved", String(attestationResolved));
+  core.setOutput("head-sha", headSha);
   if (!skip) core.setOutput("comment-body", commentBody);
 }
 

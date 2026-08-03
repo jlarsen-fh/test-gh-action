@@ -43,6 +43,7 @@ jobs:
       skip: ${{ steps.state.outputs.skip }}
       is-draft: ${{ steps.state.outputs.is-draft }}
       attestation-resolved: ${{ steps.state.outputs.attestation-resolved }}
+      head-sha: ${{ steps.state.outputs.head-sha }}
     steps:
       - name: Check out repo
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
@@ -64,6 +65,7 @@ jobs:
     needs: build-and-render
     permissions:
       pull-requests: read
+      checks: write
     # Always runs so the required check always reports a conclusion. A check that only runs
     # conditionally risks GitHub treating "never reported" the same as "failed."
     if: always()
@@ -78,32 +80,49 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Evaluate gate
-        shell: bash
-        run: |
-          if [ "${{ needs.build-and-render.result }}" = "skipped" ]; then
-            echo "Not a PR event - passing."
-            exit 0
-          fi
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const buildResult = '${{ needs.build-and-render.result }}';
+            const headSha = '${{ needs.build-and-render.outputs.head-sha }}';
 
-          if [ "${{ needs.build-and-render.result }}" != "success" ]; then
-            echo "Build-state job did not succeed - failing closed."
-            exit 1
-          fi
+            if (buildResult === 'skipped') {
+              core.info('Not a PR event - skipping check run.');
+              return;
+            }
 
-          if [ "${{ needs.build-and-render.outputs.is-draft }}" = "true" ]; then
-            echo "Draft PR - not gating yet."
-            exit 0
-          fi
+            const isDraft = '${{ needs.build-and-render.outputs.is-draft }}' === 'true';
+            const attestationResolved = '${{ needs.build-and-render.outputs.attestation-resolved }}' === 'true';
+            const overridePresent = '${{ steps.check-override.outcome }}' === 'success';
 
-          if [ "${{ steps.check-override.outcome }}" = "success" ]; then
-            echo "Override label 'Override: Skip Verification Attestation' present - passing."
-            exit 0
-          fi
+            let conclusion, summary;
+            if (buildResult !== 'success') {
+              conclusion = 'failure';
+              summary = 'Build-state job did not succeed.';
+            } else if (isDraft) {
+              conclusion = 'success';
+              summary = 'Draft PR — not gating yet.';
+            } else if (overridePresent) {
+              conclusion = 'success';
+              summary = "Override label 'Override: Skip Verification Attestation' present.";
+            } else if (attestationResolved) {
+              conclusion = 'success';
+              summary = 'Both attestation items resolved.';
+            } else {
+              conclusion = 'failure';
+              summary = 'Verification attestation still pending for author and/or reviewer.';
+            }
 
-          if [ "${{ needs.build-and-render.outputs.attestation-resolved }}" = "true" ]; then
-            echo "Verification attestation resolved for both author and reviewer."
-            exit 0
-          fi
-
-          echo "Verification attestation still pending for author and/or reviewer."
-          exit 1
+            await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'Verification Attestation Complete',
+              head_sha: headSha,
+              status: 'completed',
+              conclusion,
+              output: {
+                title: conclusion === 'success' ? 'Attestation complete' : 'Attestation pending',
+                summary,
+              },
+            });

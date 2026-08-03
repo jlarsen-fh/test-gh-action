@@ -22,6 +22,9 @@ outputs:
   attestation-resolved:
     description: "'true' if both the author and reviewer attestation items are Verified or Not Applicable."
     value: ${{ steps.build.outputs.attestation-resolved }}
+  head-sha:
+    description: "The PR's head commit SHA at the time of this run. Used by checklist-gate to post the check run against the correct commit."
+    value: ${{ steps.build.outputs.head-sha }}
 
 runs:
   using: "composite"
