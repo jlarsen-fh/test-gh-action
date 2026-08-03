@@ -78,14 +78,6 @@ jobs:
           number: ${{ github.event.pull_request.number || github.event.issue.number }}
           message: ${{ steps.state.outputs.comment-body }}
 
-      - name: Check for override label
-        id: check-override
-        uses: agilepathway/label-checker@c3d16ad512e7cea5961df85ff2486bb774caf3c5
-        continue-on-error: true
-        with:
-          any_of: "Override: Skip Verification Attestation"
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Post attestation status
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         with:
@@ -93,7 +85,7 @@ jobs:
           script: |
             const isDraft = '${{ steps.state.outputs.is-draft }}' === 'true';
             const attestationResolved = '${{ steps.state.outputs.attestation-resolved }}' === 'true';
-            const overridePresent = '${{ steps.check-override.outcome }}' === 'success';
+            const overridePresent = '${{ steps.state.outputs.override-applied }}' === 'true';
 
             let state, description;
             if (isDraft) {

@@ -25,6 +25,9 @@ outputs:
   head-sha:
     description: "The PR's head commit SHA at the time of this run. Used by checklist-gate to post the check run against the correct commit."
     value: ${{ steps.build.outputs.head-sha }}
+  override-applied:
+    description: "'true' if the override label is present on the PR, bypassing the attestation gate."
+    value: ${{ steps.build.outputs.override-applied }}
 
 runs:
   using: "composite"
