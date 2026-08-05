@@ -92,7 +92,7 @@ const RECONCILED_ITEM_FIELDS = { text: "string", area: "string", blocking: "bool
  *
  * @typedef {{ id: string, text: string, roles: Array<string> }} ConfigItem
  *
- * @typedef {{ id: string, items: Array<ConfigItem>, when?: string }} ConfigArea
+ * @typedef {{ id: string, items: Array<ConfigItem>, when?: { paths: Array<string> } }} ConfigArea
  *
  * @typedef {{
  *   legend: string,
@@ -214,7 +214,8 @@ function setOutputs(core, skip, isDraft, attestationResolved, derivedContext, co
 }
 
 /**
- * Fetches checklist_config.yaml from the repository, parses it, and builds the expected item list.
+ * Fetches checklist_config.yaml from the base branch, parses it, scans the PR's changed files
+ * to determine which conditional areas are active, and populates config.expectedItems.
  *
  * @param {object} github - Octokit instance from actions/github-script
  * @param {DerivedContext} derivedContext
@@ -230,8 +231,10 @@ async function fetchChecklistConfig(github, derivedContext) {
   });
 
   const config = yaml.load(Buffer.from(configFile.content, "base64").toString("utf8"));
+
   config.sha = configFile.sha;
-  config.expectedItems = buildExpectedItems(config);
+  config.expectedItems = await buildExpectedItems(github, derivedContext, config);
+
   return config;
 }
 
@@ -239,10 +242,12 @@ async function fetchChecklistConfig(github, derivedContext) {
  * Builds the full expected item list: two attestation entries (one per role, both blocking)
  * followed by area items expanded into one entry per (item, role) pair, all non-blocking.
  *
+ * @param {object} github - Octokit instance from actions/github-script
+ * @param {DerivedContext} derivedContext
  * @param {ChecklistConfig} config
  * @returns {Array<ExpectedItem>}
  */
-function buildExpectedItems(config) {
+async function buildExpectedItems(github, derivedContext, config) {
   const items = [];
 
   for (const item of ATTESTATIONS) {
@@ -255,7 +260,9 @@ function buildExpectedItems(config) {
     });
   }
 
-  for (const area of (config.areas || []).filter((a) => !a.when)) {
+  const activeAreaIds = await scanActiveAreas(github, derivedContext, config);
+
+  for (const area of (config.areas || []).filter((a) => !a.when || activeAreaIds.has(a.id))) {
     for (const item of area.items || []) {
       for (const role of item.roles || []) {
         items.push({
@@ -270,6 +277,88 @@ function buildExpectedItems(config) {
   }
 
   return items;
+}
+
+/**
+ * Fetches the PR's changed files and returns the set of area IDs whose when.paths patterns
+ * match at least one changed file. Areas with no when clause are never in this set — they
+ * are always included regardless.
+ *
+ * @param {object} github - Octokit instance from actions/github-script
+ * @param {DerivedContext} derivedContext
+ * @param {ChecklistConfig} config
+ * @returns {Promise<Set<string>>} Set of matched area IDs
+ */
+async function scanActiveAreas(github, derivedContext, config) {
+  const { owner, repo, pullNumber } = derivedContext;
+  const conditionalAreas = (config.areas || []).filter((a) => a.when?.paths);
+  if (conditionalAreas.length === 0) return new Set();
+
+  const files = await github.paginate(github.rest.pulls.listFiles, {
+    owner,
+    repo,
+    pull_number: pullNumber,
+  });
+
+  // Precompile one regex per area, OR-ing all its path patterns together.
+  const areaRegexes = conditionalAreas.map((area) => {
+    const sources = area.when.paths.map(globToRegex);
+    return new RegExp(`^(?:${sources.join('|')})$`);
+  });
+
+  const activeIds = new Set();
+  // pending holds the indices of areas not yet matched so that later files skip
+  // re-testing areas that already fired — including when areas overlap.
+  const pending = new Set(conditionalAreas.keys());
+
+  for (const file of files) {
+    if (pending.size === 0) break;
+    for (const i of pending) {
+      if (areaRegexes[i].test(file.filename)) {
+        activeIds.add(conditionalAreas[i].id);
+        pending.delete(i);
+      }
+    }
+  }
+  return activeIds;
+}
+
+/**
+ * Compiles a glob pattern into a RegExp.
+ * Supported wildcards:
+ *   *  — any characters except a path separator
+ *   ** — any characters including path separators (a following / is consumed)
+ *   ?  — exactly one character except a path separator
+ *
+ * @param {string} glob
+ * @returns {string} Unanchored regex source, ready to embed in a larger pattern.
+ */
+function globToRegex(glob) {
+  let re = '';
+
+  for (let i = 0; i < glob.length; i++) {
+    const c = glob[i];
+
+    if (c === '*' && glob[i + 1] === '*') {
+      // ** matches across directory separators
+      re += '.*';
+      i++; // consume the second *
+      if (glob[i + 1] === '/') i++; // consume the optional trailing slash
+    } else if (c === '*') {
+      // single * matches within one path segment only
+      re += '[^/]*';
+    } else if (c === '?') {
+      // ? matches exactly one character within one path segment
+      re += '[^/]';
+    } else if ('.+^${}()|[]\\'.includes(c)) {
+      // escape regex metacharacters that appear literally in glob patterns
+      re += '\\' + c;
+    } else {
+      re += c;
+    }
+  }
+
+  return re;
 }
 
 /**

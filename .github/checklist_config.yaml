@@ -16,20 +16,47 @@ areas:
   - id: general
     items:
       - id: tests-added
-        text: "Tests added for the change"
+        text: " Tests have been added, or there is a comment with an acceptable reasoning explaining why there aren't tests"
+        roles: [author, reviewer]
+      - id: ac-current
+        text: "Acceptance criteria are complete and up to date"
+        roles: [author, reviewer]
+      - id: vi-match-ac
+        text: "Verification instructions are written sufficiently for the AC"
+        roles: [author, reviewer]
+      - id: deployed-for-verifier
+        text: "The service is deployed for the verifier"
         roles: [author]
       - id: title-format
-        text: "PR title matches Conventional Commit + Jira ticket format"
+        text: "PR title provides a good summary of the change"
+        roles: [author, reviewer]
+      - id: title-format-against
+        text: "The PR title is what will show up in Git Blame and the commit history, so it’s important that it’s accurate."
         roles: [author]
-      - id: ac-current
-        text: "AC in Jira is current"
-        roles: [author]
-      - id: title-desc-match
-        text: "PR title/description accurately reflects the diff"
+      - id: github-checks
+        text: "GitHub checks pass"
+        roles: [author, reviewer]
+
+  - id: readme-updates
+    when:
+      paths: ["README.md"]
+    items:
+      - id: say-something-nice
+        text: "Make sure the README.md says something nice"
         roles: [reviewer]
-      - id: ac-match
-        text: "AC in Jira matches what was actually built"
+
+  - id: area-a
+    when:
+      paths: ["a/**"]
+    items:
+      - id: really-in-a
+        text: Have you thought about whether that should be in A?
         roles: [reviewer]
-      - id: tests-edge-cases
-        text: "Tests exercise the stated edge cases, not just the happy path"
+
+  - id: area-b-txt
+    when:
+      paths: ["b1/*.txt", "b2/*.txt"]
+    items:
+      - id: txt-files-in-b
+        text: "Should this actually be an .md file?"
         roles: [reviewer]
