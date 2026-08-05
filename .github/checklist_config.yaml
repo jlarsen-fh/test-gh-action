@@ -1,14 +1,6 @@
 # Informational checklist items for the PR review checklist bot (.github/workflows/pr_checklist.yaml).
-#
-# This file defines the non-blocking items only. The verification attestation (the merge gate)
-# is hardcoded in checklist-build-state/index.js and is not configurable here. Nothing in
-# `areas` can block merge. If dynamically blockable items are needed in the future, that can
-# be designed as a separate phase.
-#
-# No manual version field: checklist-build-state reads this file's git blob SHA from the
-# Contents API at build time and stamps it into the checklist state as `config_sha`.
 
-legend: "Check a box once done. If an item doesn't apply, edit its line to add a reason instead of checking it: `- [ ] item text — N/A: your reason`."
+legend: "Check a box once done. If an item doesn't apply, edit its line to add a reason instead of checking it: \n`- [ ] item text — N/A: your reason`."
 
 reviewer_note: "Reviewers, consider the [code review guide](https://auntbertha.atlassian.net/wiki/spaces/EN/pages/4666851358/Code+Review+Guide) as you proceed."
 
@@ -51,6 +43,9 @@ areas:
     items:
       - id: really-in-a
         text: Have you thought about whether that should be in A?
+        roles: [reviewer]
+      - id: really-really-in-a
+        text: Have you really really thought about it?
         roles: [reviewer]
 
   - id: area-b-txt
