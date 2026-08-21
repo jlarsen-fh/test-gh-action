@@ -1,0 +1,72 @@
+name: Friday merge freeze
+
+# Blocks merges into develop on Fridays (US Central, DST-aware) by posting a required
+# commit-status context. Runs whenever a PR is opened/updated or (un)labeled so the
+# override label takes effect immediately. A scheduled companion workflow
+# (friday_merge_freeze_sweep.yaml) writes the same context to PRs that went green before
+# Friday, so the freeze reflects merge time rather than only push time.
+
+on:
+  pull_request:
+    branches:
+      - develop
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - labeled
+      - unlabeled
+
+concurrency:
+  group: friday-merge-freeze-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  statuses: write
+  pull-requests: read
+
+jobs:
+  freeze-check:
+    name: Friday merge freeze
+    runs-on: ubuntu-latest
+    steps:
+      # An urgent PR bypasses the freeze by carrying this label. label-checker exits
+      # non-zero when the label is absent, so continue-on-error keeps the job running and
+      # we branch on its outcome below.
+      - name: Check for override label
+        id: check-override
+        uses: agilepathway/label-checker@c3d16ad512e7cea5961df85ff2486bb774caf3c5
+        continue-on-error: true
+        with:
+          any_of: "Override: Friday Merge Freeze"
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+
+      # The posted status (not this job's own conclusion) is the required check, so the
+      # step always exits 0 after reconciling the status for this PR's head commit.
+      - name: Post friday-merge-freeze status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          OVERRIDE: ${{ steps.check-override.outcome }}
+        run: |
+          set -euo pipefail
+
+          # %u: Mon=1 … Fri=5 … Sun=7. America/Chicago resolves CDT/CST automatically,
+          # so the freeze follows daylight saving without any UTC offset math.
+          if [ "$OVERRIDE" = "success" ]; then
+            state="success"
+            description="Override label present — freeze bypassed"
+          elif [ "$(TZ='America/Chicago' date +%u)" = "5" ]; then
+            state="failure"
+            description="Merges into develop are frozen on Fridays (US Central). Add the 'Override: Friday Merge Freeze' label to bypass."
+          else
+            state="success"
+            description="Not a freeze day"
+          fi
+
+          echo "friday-merge-freeze -> $state ($description)"
+          gh api "repos/${{ github.repository }}/statuses/$SHA" \
+            -f state="$state" \
+            -f context="friday-merge-freeze" \
+            -f description="$description"

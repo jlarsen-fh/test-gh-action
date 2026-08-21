@@ -1,0 +1,70 @@
+name: Friday merge freeze sweep
+
+# Reconciles the friday-merge-freeze commit status on every open develop PR at the freeze
+# boundaries, so PRs that went green before Friday are flipped red when the freeze starts
+# and back to green when it lifts. The PR-triggered workflow (friday_merge_freeze.yaml)
+# only re-evaluates on PR events, so without this sweep a Thursday-green PR could be merged
+# on Friday. The sweep is idempotent: each run derives the desired state from the current
+# Central-time day, so repeated or manual runs converge to the correct state.
+
+on:
+  schedule:
+    # GitHub cron is UTC-only and cannot express DST, so we fire at both candidate hours
+    # for midnight Central and let the tz-based check inside the job decide whether to act.
+    # CDT = UTC-5, CST = UTC-6.
+    - cron: "0 5,6 * * 5"   # Friday 00:00 Central — apply the freeze
+    - cron: "0 5,6 * * 6"   # Saturday 00:00 Central — lift the freeze
+  workflow_dispatch:        # manual freeze/thaw and testing
+
+concurrency:
+  group: friday-merge-freeze-sweep
+  cancel-in-progress: false
+
+permissions:
+  statuses: write
+  pull-requests: read
+
+jobs:
+  sweep:
+    name: Reconcile freeze status on open develop PRs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reconcile friday-merge-freeze status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # %u: Mon=1 … Fri=5 … Sun=7. America/Chicago resolves CDT/CST automatically.
+          if [ "$(TZ='America/Chicago' date +%u)" = "5" ]; then
+            frozen=1
+            echo "Central-time Friday: applying freeze to open develop PRs"
+          else
+            frozen=0
+            echo "Not a Central-time Friday: clearing freeze on open develop PRs"
+          fi
+
+          # Each open PR gets the freeze status unless it carries the override label.
+          gh pr list --base develop --state open \
+            --json number,headRefOid,labels \
+            --jq '.[] | [.number, .headRefOid, (any(.labels[].name == "Override: Friday Merge Freeze"; .))] | @tsv' \
+          | while IFS=$'\t' read -r number sha overridden; do
+              if [ "$overridden" = "true" ]; then
+                state="success"
+                description="Override label present — freeze bypassed"
+              elif [ "$frozen" = "1" ]; then
+                state="failure"
+                description="Merges into develop are frozen on Fridays (US Central). Add the 'Override: Friday Merge Freeze' label to bypass."
+              else
+                state="success"
+                description="Not a freeze day"
+              fi
+
+              echo "PR #$number ($sha): friday-merge-freeze -> $state"
+              gh api "repos/$REPO/statuses/$sha" \
+                -f state="$state" \
+                -f context="friday-merge-freeze" \
+                -f description="$description"
+            done
