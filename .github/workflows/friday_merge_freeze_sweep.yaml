@@ -47,7 +47,7 @@ jobs:
           fi
 
           # Each open PR gets the freeze status unless it carries the override label.
-          gh pr list --base develop --state open \
+          gh pr list --repo "$REPO" --base develop --state open \
             --json number,headRefOid,labels \
             --jq '.[] | [.number, .headRefOid, (any(.labels[].name == "Override: Friday Merge Freeze"; .))] | @tsv' \
           | while IFS=$'\t' read -r number sha overridden; do

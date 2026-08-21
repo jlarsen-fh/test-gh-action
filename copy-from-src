@@ -1,0 +1,3 @@
+cp ../src/.github/actions/checklist-build-state/* .github/actions/checklist-build-state
+cp ../src/.github/workflows/pr_checklist.yaml .github/workflows
+cp ../src/.github/checklist_config.yaml .github
