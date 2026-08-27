@@ -23,13 +23,13 @@ areas:
         text: "PR title provides a good summary of the change"
         roles: [reviewer]
 
-  - id: readme-updates
+  - id: unified-frontend
     when:
-      paths: ["README.md"]
+      paths: ["microservices/cloud_run/unified-frontend/**"]
     items:
-      - id: say-something-nice
-        text: "Make sure the README.md says something nice"
-        roles: [reviewer]
+      - id: following-ufe-conventions
+        text: "The change follows the [unified frontend conventions](https://auntbertha.atlassian.net/wiki/spaces/EN/pages/5500928016/UFE+Frontend+Conventions)"
+        roles: [author, reviewer]
 
   - id: area-a
     when:
