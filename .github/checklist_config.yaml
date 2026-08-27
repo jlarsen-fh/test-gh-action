@@ -8,11 +8,11 @@ areas:
   - id: general
     items:
       - id: tests-added
-        text: " Tests have been added, or there is a comment with an acceptable reasoning explaining why there aren't tests"
-        roles: [author, reviewer]
+        text: "Tests have been added, or there is a comment with an acceptable reasoning explaining why there aren't tests"
+        roles: [reviewer]
       - id: ac-current
         text: "Acceptance criteria are complete and up to date"
-        roles: [author, reviewer]
+        roles: [author]
       - id: vi-match-ac
         text: "Verification instructions are written sufficiently for the AC"
         roles: [author, reviewer]
@@ -21,13 +21,7 @@ areas:
         roles: [author]
       - id: title-format
         text: "PR title provides a good summary of the change"
-        roles: [author, reviewer]
-      - id: title-format-against
-        text: "The PR title is what will show up in Git Blame and the commit history, so it’s important that it’s accurate."
-        roles: [author]
-      - id: github-checks
-        text: "GitHub checks pass"
-        roles: [author, reviewer]
+        roles: [reviewer]
 
   - id: readme-updates
     when:
