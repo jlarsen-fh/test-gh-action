@@ -7,9 +7,9 @@ const OVERRIDE_LABEL = "Override: Skip Verification Attestation";
 const BOT_LOGIN = "github-actions[bot]";
 const COMMENT_MARKER = "<!-- checklist-bot -->";
 
-const SECTION_ATTESTATION = "## Verification Attestation (required to merge)";
-const SECTION_AUTHOR      = "### Author checklist (informational)";
-const SECTION_REVIEWER    = "### Reviewer checklist (informational)";
+const SECTION_ATTESTATION = "## Verification Attestation";
+const SECTION_AUTHOR      = "### Author checklist";
+const SECTION_REVIEWER    = "### Reviewer checklist";
 
 // Matches the hidden JSON state block embedded at the bottom of the bot's comment.
 // Capture group 1: the raw JSON string between the delimiters.
