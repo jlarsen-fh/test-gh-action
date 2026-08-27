@@ -25,7 +25,7 @@ areas:
 
   - id: unified-frontend
     when:
-      paths: ["microservices/cloud_run/unified-frontend/**"]
+      paths: ["microservices/cloud_run/unified_frontend/**"]
     items:
       - id: following-ufe-conventions
         text: "The change follows the [unified frontend conventions](https://auntbertha.atlassian.net/wiki/spaces/EN/pages/5500928016/UFE+Frontend+Conventions)"
