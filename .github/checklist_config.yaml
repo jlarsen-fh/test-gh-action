@@ -1,6 +1,6 @@
 # Informational checklist items for the PR review checklist bot (.github/workflows/pr_checklist.yaml).
 
-legend: "Check a box once done. If an item doesn't apply, edit its line to add a reason instead of checking it: \n`- [ ] item text — N/A: your reason`."
+legend: ""
 
 reviewer_note: "Reviewers, consider the [code review guide](https://auntbertha.atlassian.net/wiki/spaces/EN/pages/4666851358/Code+Review+Guide) as you proceed."
 
