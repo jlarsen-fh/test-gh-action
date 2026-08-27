@@ -28,7 +28,7 @@ areas:
       paths: ["microservices/cloud_run/unified_frontend/**"]
     items:
       - id: following-ufe-conventions
-        text: "The change follows the [unified frontend conventions](https://auntbertha.atlassian.net/wiki/spaces/EN/pages/5500928016/UFE+Frontend+Conventions)"
+        text: "The change follows the [UFE Conventions](https://auntbertha.atlassian.net/wiki/spaces/EN/pages/5500928016/UFE+Frontend+Conventions)"
         roles: [author, reviewer]
       - id: ufe-migration-checklist
         text: "If migrating an existing module, go through the [UFE Move Out Checklist](https://auntbertha.atlassian.net/wiki/spaces/EN/pages/5471502337/Move+out+Checklist)"
