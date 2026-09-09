@@ -56,6 +56,25 @@ module.exports = async ({ github, context, core }) => {
   const priorBody = await getChecklistBody(github, owner, repo, pr.number);
   const checked = parseExistingCheckboxes(priorBody);
 
+  // AI-ASSISTANT-TEMP: diagnostics for checkbox-preservation issue — remove once resolved.
+  {
+    const all = await github.paginate(github.rest.issues.listComments, {
+      owner,
+      repo,
+      issue_number: pr.number,
+    });
+    core.info(`[checklist-debug] event=${context.eventName} total comments=${all.length}`);
+    for (const c of all) {
+      core.info(
+        `[checklist-debug] comment id=${c.id} author=${c.user.login} isBot=${c.user.login === BOT_LOGIN} startsWithMarker=${c.body.startsWith(COMMENT_MARKER)} includesMarker=${c.body.includes(COMMENT_MARKER)} len=${c.body.length}`,
+      );
+    }
+    core.info(`[checklist-debug] matched priorBody len=${priorBody.length}`);
+    core.info(`[checklist-debug] priorBody(JSON)=${JSON.stringify(priorBody)}`);
+    core.info(`[checklist-debug] checkedKeys=${JSON.stringify([...checked])}`);
+    core.info(`[checklist-debug] expectedKeys=${JSON.stringify(expected.map(itemKey))}`);
+  }
+
   core.setOutput("comment-body", renderComment(config, expected, checked));
 };
 
