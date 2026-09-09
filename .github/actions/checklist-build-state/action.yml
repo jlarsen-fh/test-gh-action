@@ -1,7 +1,7 @@
 name: "Checklist: build state"
 description: >-
-  Reads checklist_config.yaml from develop, reconciles the existing sticky comment's visible
-  checkbox state with the current config, and outputs the rendered comment body and gate status.
+  Reads checklist_config.yaml from the PR base branch, preserves any boxes already checked in the
+  existing sticky comment, and outputs the rendered (non-blocking) checklist comment body.
 
 inputs:
   github-token:
@@ -10,24 +10,9 @@ inputs:
     default: ${{ github.token }}
 
 outputs:
-  skip:
-    description: "'true' if the comment should not be re-rendered this run (draft PR, bot self-edit, or non-checklist comment edit)."
-    value: ${{ steps.build.outputs.skip }}
-  is-draft:
-    description: "'true' if the PR is still a draft. The gate passes without checking attestation state."
-    value: ${{ steps.build.outputs.is-draft }}
   comment-body:
-    description: "Fully rendered markdown body for the sticky checklist comment. Only set when skip is 'false'."
+    description: "Fully rendered markdown body for the sticky checklist comment."
     value: ${{ steps.build.outputs.comment-body }}
-  attestation-resolved:
-    description: "'true' if both the author and reviewer attestation items are Verified or Not Applicable."
-    value: ${{ steps.build.outputs.attestation-resolved }}
-  head-sha:
-    description: "The PR's head commit SHA at the time of this run. Used by checklist-gate to post the check run against the correct commit."
-    value: ${{ steps.build.outputs.head-sha }}
-  override-applied:
-    description: "'true' if the override label is present on the PR, bypassing the attestation gate."
-    value: ${{ steps.build.outputs.override-applied }}
 
 runs:
   using: "composite"
