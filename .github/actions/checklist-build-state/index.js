@@ -225,7 +225,7 @@ function parseExistingCheckboxes(body) {
   const checked = new Set();
   let section = null;
 
-  for (const line of body.split("\n")) {
+  for (const line of body.split(/\r?\n/)) {
     if (headerToSection.has(line)) {
       section = headerToSection.get(line);
       continue;
