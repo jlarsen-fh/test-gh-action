@@ -43,7 +43,7 @@ module.exports = async ({ github, context, core }) => {
   const { owner, repo } = context.repo;
   const pr = context.payload.pull_request;
 
-  const config = await fetchChecklistConfig(github, pr.head);
+  const config = await fetchChecklistConfig(github, owner, repo, pr.base.ref);
   const activeAreas = await resolveActiveAreas(
     github,
     owner,
@@ -60,19 +60,22 @@ module.exports = async ({ github, context, core }) => {
 };
 
 /**
- * Fetches and parses checklist_config.yaml from the PR head branch, so the checklist reflects the
- * version on the PR's own branch and config changes can be tested pre-merge.
+ * Fetches and parses checklist_config.yaml from the PR's base (target) branch. Reading from the
+ * target rather than the PR's own branch means every open PR is evaluated against one canonical
+ * checklist, and a config change reaches all in-flight PRs as soon as it merges — no rebase needed.
  *
  * @param {object} github - Octokit instance from actions/github-script
- * @param {{ ref: string, repo: { owner: { login: string }, name: string } }} head - The PR head (context.payload.pull_request.head)
+ * @param {string} owner - Repository owner (org or user login)
+ * @param {string} repo - Repository name
+ * @param {string} baseBranch - The PR's base ref (context.payload.pull_request.base.ref)
  * @returns {Promise<ChecklistConfig>}
  */
-async function fetchChecklistConfig(github, head) {
+async function fetchChecklistConfig(github, owner, repo, baseBranch) {
   const { data: configFile } = await github.rest.repos.getContent({
-    owner: head.repo.owner.login,
-    repo: head.repo.name,
+    owner,
+    repo,
     path: CONFIG_PATH,
-    ref: head.ref,
+    ref: baseBranch,
   });
 
   return yaml.load(
