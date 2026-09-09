@@ -1,26 +1,32 @@
-# Informational checklist items for the PR review checklist bot (.github/workflows/pr_checklist.yaml).
-
-legend: ""
-
 reviewer_note: "Reviewers, consider the [code review guide](https://auntbertha.atlassian.net/wiki/spaces/EN/pages/4666851358/Code+Review+Guide) as you proceed."
+
+attestation:
+  items:
+    - id: vi-executed-author
+      text: "Author: I executed the VI and manually tested this change"
+    - id: vi-executed-reviewer
+      text: "Reviewer: I executed the VI and manually tested this change"
 
 areas:
   - id: general
     items:
       - id: tests-added
-        text: "Tests have been added, or there is a comment with an acceptable reasoning explaining why there aren't tests"
-        roles: [reviewer]
-      - id: ac-current
-        text: "Acceptance criteria are complete and up to date"
-        roles: [author]
-      - id: vi-match-ac
-        text: "Verification instructions are written sufficiently for the AC"
-        roles: [author, reviewer]
-      - id: deployed-for-verifier
-        text: "The service is deployed for the verifier"
+        text: "Tests added for the change"
         roles: [author]
       - id: title-format
-        text: "PR title provides a good summary of the change"
+        text: "PR title matches Conventional Commit + Jira ticket format"
+        roles: [author]
+      - id: ac-current
+        text: "AC in Jira is current"
+        roles: [author]
+      - id: title-desc-match
+        text: "PR title/description accurately reflects the diff"
+        roles: [reviewer]
+      - id: ac-match
+        text: "AC in Jira matches what was actually built"
+        roles: [reviewer]
+      - id: tests-edge-cases
+        text: "Tests exercise the stated edge cases, not just the happy path"
         roles: [reviewer]
 
   - id: unified-frontend
