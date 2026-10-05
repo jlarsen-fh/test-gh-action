@@ -4,8 +4,10 @@ attestation:
   items:
     - id: vi-executed-author
       text: "Author: I executed the VI and manually tested this change"
+      blocking: true
     - id: vi-executed-reviewer
       text: "Reviewer: I executed the VI and manually tested this change"
+      blocking: true
 
 areas:
   - id: general
@@ -13,21 +15,27 @@ areas:
       - id: tests-added
         text: "Tests added for the change"
         roles: [author]
+        blocking: true
       - id: title-format
         text: "PR title matches Conventional Commit + Jira ticket format"
         roles: [author]
+        blocking: true
       - id: ac-current
         text: "AC in Jira is current"
         roles: [author]
+        blocking: true
       - id: title-desc-match
         text: "PR title/description accurately reflects the diff"
         roles: [reviewer]
+        blocking: true
       - id: ac-match
         text: "AC in Jira matches what was actually built"
         roles: [reviewer]
+        blocking: true
       - id: tests-edge-cases
         text: "Tests exercise the stated edge cases, not just the happy path"
         roles: [reviewer]
+        blocking: true
 
   - id: unified-frontend
     when:
