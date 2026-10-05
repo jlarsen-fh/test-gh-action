@@ -23,7 +23,8 @@ const SECTIONS = [
 ];
 
 // Matches a rendered checklist line. A single status marker leads the text and changes with state:
-// "(BLOCKING)" while a required item is unchecked, "(actor, M/D/YY)" once it is checked. Captures:
+// bold "**(BLOCKING)**" while a required item is unchecked, "(actor, M/D/YY)" once it is checked.
+// Captures:
 //   group 1: checkbox character (" ", "x", or "X")
 //   group 2: stamp actor (only for the checked "(actor, date)" form)
 //   group 3: stamp date  (only for the checked "(actor, date)" form)
@@ -31,7 +32,7 @@ const SECTIONS = [
 // Because the marker leads the text, parens later in the text (e.g. the markdown-link "PR title
 // matches ..." item) are never at risk of being mistaken for it.
 const LINE_RE =
-  /^- \[([ xX])\] (?:\((?:BLOCKING|([^(),]+), (\d{1,2}\/\d{1,2}\/\d{2}))\) )?(.+?)\s*$/;
+  /^- \[([ xX])\] (?:(?:\*\*\(BLOCKING\)\*\*|\(([^(),]+), (\d{1,2}\/\d{1,2}\/\d{2})\)) )?(.+?)\s*$/;
 
 /**
  * @typedef {{ section: "attestation"|"author"|"reviewer", text: string, blocking: boolean }} ExpectedItem
@@ -469,8 +470,9 @@ function renderComment(config, expected, checked, derived) {
 
 /**
  * Renders a single item as a markdown task-list line. A single status marker leads the text and
- * changes with state: `(BLOCKING)` while a required item is unchecked, then the attribution stamp
- * `(actor, M/D/YY)` once it is checked. LINE_RE strips whichever marker is present on re-parse.
+ * changes with state: bold `**(BLOCKING)**` while a required item is unchecked, then the plain
+ * attribution stamp `(actor, M/D/YY)` once it is checked. LINE_RE strips whichever is present on
+ * re-parse.
  *
  * @param {RenderItem} item - A single item with its section, text, checked flag, and stamp
  * @returns {string}
@@ -484,7 +486,7 @@ function renderLine(item) {
     return `- [${box}] (${item.stamp.actor}, ${item.stamp.date}) ${item.text}`;
   }
   if (item.blocking) {
-    return `- [${box}] (BLOCKING) ${item.text}`;
+    return `- [${box}] **(BLOCKING)** ${item.text}`;
   }
   return `- [${box}] ${item.text}`;
 }
