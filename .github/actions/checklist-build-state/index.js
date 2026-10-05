@@ -8,7 +8,11 @@ const CONFIG_PATH = ".github/checklist_config.yaml";
 
 // PR merge-title types (Conventional Commit) that are exempt from the checklist entirely: trivial or
 // non-code changes with nothing to verify. The whole comment is skipped for these.
-const SKIP_TYPES = new Set(["revert", "docs", "ci", "chore", "test"]);
+const EXEMPT_TYPES = new Set(["revert", "docs", "ci", "chore", "test"]);
+
+// Placeholder attributor for a checked item we stamp outside a comment edit, i.e. one that was
+// already checked before we could record who did it (not a real person this run).
+const UNKNOWN_ACTOR = "unknown";
 
 // The checklist's sections, in render order. Each pairs an internal id with the markdown header
 // used both to render the section and to detect it when parsing an existing comment.
@@ -18,15 +22,16 @@ const SECTIONS = [
   { id: "reviewer", header: "## Reviewer checklist" },
 ];
 
-// Matches a rendered checklist line. Group 1: the checkbox character (" ", "x", or "X").
-// Group 2: the item text (plus any trailing stamp, which STAMP_RE then separates out).
-const LINE_RE = /^- \[([ xX])\] (.+?)\s*$/;
-
-// Trailing stamp a rendered line may carry: " (BLOCKING)" on an unchecked blocking item, or
-// " (actor, YYYY-MM-DD)" on a checked one. Matched specifically (not a generic trailing paren) so it
-// is stripped to recover the base item text without eating legitimate parens in the text itself,
-// e.g. the markdown-link "PR title matches ..." item. Groups: 1 = actor, 2 = date (attribution form).
-const STAMP_RE = /\s*\((?:BLOCKING|([^(),]+), (\d{4}-\d{2}-\d{2}))\)$/;
+// Matches a rendered checklist line. A single status marker leads the text and changes with state:
+// "(BLOCKING)" while a required item is unchecked, "(actor, M/D/YY)" once it is checked. Captures:
+//   group 1: checkbox character (" ", "x", or "X")
+//   group 2: stamp actor (only for the checked "(actor, date)" form)
+//   group 3: stamp date  (only for the checked "(actor, date)" form)
+//   group 4: item text (without the leading marker)
+// Because the marker leads the text, parens later in the text (e.g. the markdown-link "PR title
+// matches ..." item) are never at risk of being mistaken for it.
+const LINE_RE =
+  /^- \[([ xX])\] (?:\((?:BLOCKING|([^(),]+), (\d{1,2}\/\d{1,2}\/\d{2}))\) )?(.+?)\s*$/;
 
 /**
  * @typedef {{ section: "attestation"|"author"|"reviewer", text: string, blocking: boolean }} ExpectedItem
@@ -42,18 +47,19 @@ const STAMP_RE = /\s*\((?:BLOCKING|([^(),]+), (\d{4}-\d{2}-\d{2}))\)$/;
  * @typedef {{
  *   prNumber: number, headSha: string, baseRef: string, title: string, isDraft: boolean,
  *   isCommentEvent: boolean, isChecklistEdit: boolean, isBotSelfEdit: boolean,
+ *   actor: string, today: string,
  * }} DerivedContext
  */
 
 /**
  * Main entry point. Computes checklist state for the current PR and emits the step outputs the
  * workflow uses to post the sticky comment, the jump-link, and the "PR Checklist" commit status:
- *   - head-sha        the PR head commit the status must be posted against
- *   - is-draft        'true' while the PR is a draft (the gate passes)
- *   - skip-type       'true' for exempt PR types (revert/docs/ci/chore/test); no checklist
- *   - gate-satisfied  'true' when every blocking item is checked
- *   - skip            'true' if the comment should not be re-rendered this run
- *   - comment-body    the rendered comment (set only when skip is 'false')
+ *   - head-sha                the PR head commit the status must be posted against
+ *   - is-draft                'true' while the PR is a draft (the gate passes)
+ *   - exempt                  'true' for exempt PR types (revert/docs/ci/chore/test); no checklist
+ *   - required-items-checked  'true' when every blocking item is checked
+ *   - skip-render             'true' if the comment should not be re-rendered this run
+ *   - comment-body            the rendered comment (set only when skip-render is 'false')
  *
  * Runs on both pull_request and issue_comment(edited) events: ticking a checkbox edits the bot's
  * comment, which re-runs this to re-evaluate the gate. Our own edits (isBotSelfEdit) are skipped to
@@ -68,14 +74,14 @@ module.exports = async ({ github, context, core }) => {
   core.setOutput("head-sha", derived.headSha);
   core.setOutput("is-draft", String(derived.isDraft));
 
-  // Exempt PR types get no checklist; the gate auto-passes (the workflow reads skip-type + head-sha).
-  if (SKIP_TYPES.has(prType(derived.title))) {
-    core.setOutput("skip-type", "true");
-    core.setOutput("skip", "true");
-    core.setOutput("gate-satisfied", "false");
+  // Exempt PR types get no checklist; the gate auto-passes (the workflow reads exempt + head-sha).
+  if (EXEMPT_TYPES.has(prType(derived.title))) {
+    core.setOutput("exempt", "true");
+    core.setOutput("skip-render", "true");
+    core.setOutput("required-items-checked", "false");
     return;
   }
-  core.setOutput("skip-type", "false");
+  core.setOutput("exempt", "false");
 
   const config = await fetchChecklistConfig(github, owner, repo, derived.baseRef);
   const activeAreas = await resolveActiveAreas(
@@ -90,21 +96,19 @@ module.exports = async ({ github, context, core }) => {
   const priorBody = await getChecklistBody(github, owner, repo, derived.prNumber);
   const checked = parseExistingCheckboxes(priorBody);
 
-  core.setOutput("gate-satisfied", String(computeGateSatisfied(expected, checked)));
+  core.setOutput(
+    "required-items-checked",
+    String(allRequiredItemsChecked(expected, checked)),
+  );
 
   // Re-render unless this run is our own edit (loop guard) or an edit to some other comment.
   const render =
     !derived.isBotSelfEdit &&
     !(derived.isCommentEvent && !derived.isChecklistEdit);
 
-  core.setOutput("skip", String(!render));
+  core.setOutput("skip-render", String(!render));
   if (render) {
-    const actor = context.payload.sender?.login ?? BOT_LOGIN;
-    const today = new Date().toISOString().slice(0, 10);
-    core.setOutput(
-      "comment-body",
-      renderComment(config, expected, checked, actor, today),
-    );
+    core.setOutput("comment-body", renderComment(config, expected, checked, derived));
   }
 };
 
@@ -149,6 +153,13 @@ async function deriveContext(github, context) {
     context.payload.comment.user.login === BOT_LOGIN &&
     context.payload.comment.body.startsWith(COMMENT_MARKER);
 
+  // Who to attribute a newly-checked item to. A box is only ticked via a comment edit, so on any
+  // other event nobody ticked anything this run; an unstamped checked item seen then is pre-existing,
+  // so attribute it to UNKNOWN_ACTOR rather than mislabel the pusher.
+  const actor = isCommentEvent
+    ? context.payload.sender?.login ?? UNKNOWN_ACTOR
+    : UNKNOWN_ACTOR;
+
   return {
     prNumber: pr.number,
     headSha: pr.head.sha,
@@ -158,7 +169,25 @@ async function deriveContext(github, context) {
     isCommentEvent,
     isChecklistEdit,
     isBotSelfEdit: context.payload.sender?.login === BOT_LOGIN,
+    actor,
+    today: todayCentral(),
   };
+}
+
+/**
+ * Today's date as M/D/YY in US Central time (Findhelp's standard timezone), used to stamp when an
+ * item was checked. The short en-US numeric format keeps the inline stamp compact, and the IANA zone
+ * handles DST.
+ *
+ * @returns {string}
+ */
+function todayCentral() {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Chicago",
+    year: "2-digit",
+    month: "numeric",
+    day: "numeric",
+  }).format(new Date());
 }
 
 /**
@@ -270,13 +299,13 @@ function buildExpectedItems(config, activeAreas) {
   const items = [];
 
   for (const item of config.attestation?.items || []) {
-    items.push({ section: "attestation", text: item.text, blocking: !!item.blocking });
+    items.push({ section: "attestation", text: item.text, blocking: Boolean(item.blocking) });
   }
 
   for (const area of activeAreas) {
     for (const item of area.items || []) {
       for (const role of item.roles || []) {
-        items.push({ section: role, text: item.text, blocking: !!item.blocking });
+        items.push({ section: role, text: item.text, blocking: Boolean(item.blocking) });
       }
     }
   }
@@ -292,7 +321,7 @@ function buildExpectedItems(config, activeAreas) {
  * @param {Map<string, Stamp|null>} checked - Keyed (see itemKey) by checked item; value is its stamp
  * @returns {boolean}
  */
-function computeGateSatisfied(expected, checked) {
+function allRequiredItemsChecked(expected, checked) {
   return expected
     .filter((item) => item.blocking)
     .every((item) => checked.has(itemKey(item)));
@@ -360,8 +389,9 @@ function parseExistingCheckboxes(body) {
 }
 
 /**
- * Parses a single markdown checkbox line, separating any trailing stamp (STAMP_RE) from the base
- * item text so the text still matches the config. Returns null when the line is not a checkbox.
+ * Parses a single markdown checkbox line. LINE_RE splits the base text from any trailing stamp in one
+ * pass, so the text matches the config and the stamp (if the "(actor, date)" form) comes back too.
+ * Returns null when the line is not a checkbox.
  *
  * @param {string} line - One line from the comment body
  * @returns {{ checked: boolean, text: string, stamp: Stamp|null } | null}
@@ -370,17 +400,12 @@ function parseCheckboxLine(line) {
   const match = line.match(LINE_RE);
   if (!match) return null;
 
-  const checked = match[1].toLowerCase() === "x";
-  let text = match[2].trim();
-
-  let stamp = null;
-  const stampMatch = text.match(STAMP_RE);
-  if (stampMatch) {
-    text = text.slice(0, stampMatch.index).trimEnd();
-    if (stampMatch[1]) stamp = { actor: stampMatch[1], date: stampMatch[2] };
-  }
-
-  return { checked, text, stamp };
+  const [, box, actor, date, text] = match;
+  return {
+    checked: box.toLowerCase() === "x",
+    text: text.trim(),
+    stamp: actor ? { actor, date } : null,
+  };
 }
 
 /**
@@ -399,29 +424,28 @@ function itemKey(item) {
  * Renders the full comment body: the marker sentinel, the attestation section, the Author and
  * Reviewer checklists, and an optional reviewer note. Merges each expected item with its checked
  * state and inline stamp (looked up by itemKey) so a re-render preserves ticked boxes and their
- * attribution. A newly-checked item (checked with no prior stamp) is stamped with the run's actor
- * and today's date; an existing stamp is preserved so it does not drift.
- *
- * Note: when stamping is first applied to a comment whose boxes were already checked (by the earlier
- * non-attributing version), those items get the current run's actor — a one-time transition artifact.
+ * attribution. A newly-checked item (checked with no prior stamp) is stamped with derived.actor and
+ * derived.today; an existing stamp is preserved so it does not drift. Pre-existing checks seen outside
+ * a comment edit are attributed to UNKNOWN_ACTOR (see deriveContext), never a real person.
  *
  * @param {ChecklistConfig} config - Parsed checklist_config.yaml
  * @param {Array<ExpectedItem>} expected - Flattened items to render, in section/render order
  * @param {Map<string, Stamp|null>} checked - Keyed (see itemKey) by checked item; value is its stamp
- * @param {string} actor - Login to attribute newly-checked items to (the event sender)
- * @param {string} today - ISO date (YYYY-MM-DD) to stamp newly-checked items with
+ * @param {DerivedContext} derived - Supplies actor + today for stamping newly-checked items
  * @returns {string}
  */
-function renderComment(config, expected, checked, actor, today) {
+function renderComment(config, expected, checked, derived) {
   // Merge each expected item with its checked state and stamp (preserve an existing stamp; stamp a
-  // newly-checked item with the current actor and date).
+  // newly-checked item with the run's actor and date).
   const items = expected.map((item) => {
     const key = itemKey(item);
     const isChecked = checked.has(key);
     return {
       ...item,
       checked: isChecked,
-      stamp: isChecked ? checked.get(key) || { actor, date: today } : null,
+      stamp: isChecked
+        ? checked.get(key) || { actor: derived.actor, date: derived.today }
+        : null,
     };
   });
 
@@ -444,9 +468,9 @@ function renderComment(config, expected, checked, actor, today) {
 }
 
 /**
- * Renders a single item as a markdown task-list line. A checked item carries its attribution stamp
- * ` (actor, date)`; an unchecked blocking item carries ` (BLOCKING)` so the gate requirement is
- * visible. STAMP_RE strips either suffix back off when the line is re-parsed.
+ * Renders a single item as a markdown task-list line. A single status marker leads the text and
+ * changes with state: `(BLOCKING)` while a required item is unchecked, then the attribution stamp
+ * `(actor, M/D/YY)` once it is checked. LINE_RE strips whichever marker is present on re-parse.
  *
  * @param {RenderItem} item - A single item with its section, text, checked flag, and stamp
  * @returns {string}
@@ -454,14 +478,15 @@ function renderComment(config, expected, checked, actor, today) {
 function renderLine(item) {
   const box = item.checked ? "x" : " ";
 
-  let suffix = "";
-  if (item.checked && item.stamp) {
-    suffix = ` (${item.stamp.actor}, ${item.stamp.date})`;
-  } else if (!item.checked && item.blocking) {
-    suffix = " (BLOCKING)";
+  // The leading marker is one slot that changes with state: a checked item shows its stamp (set in
+  // renderComment); an unchecked required item shows (BLOCKING). The two never co-occur.
+  if (item.checked) {
+    return `- [${box}] (${item.stamp.actor}, ${item.stamp.date}) ${item.text}`;
   }
-
-  return `- [${box}] ${item.text}${suffix}`;
+  if (item.blocking) {
+    return `- [${box}] (BLOCKING) ${item.text}`;
+  }
+  return `- [${box}] ${item.text}`;
 }
 
 /**
@@ -481,20 +506,20 @@ module.exports.backfill = async ({ github, context, core }) => {
   });
 
   for (const pr of prs) {
-    const skipType = SKIP_TYPES.has(prType(pr.title));
+    const exempt = EXEMPT_TYPES.has(prType(pr.title));
 
-    let gateSatisfied = false;
-    if (!skipType && !pr.draft) {
+    let requiredItemsChecked = false;
+    if (!exempt && !pr.draft) {
       const config = await fetchChecklistConfig(github, owner, repo, pr.base.ref);
       const activeAreas = await resolveActiveAreas(github, owner, repo, pr.number, config);
       const expected = buildExpectedItems(config, activeAreas);
       const checked = parseExistingCheckboxes(
         await getChecklistBody(github, owner, repo, pr.number),
       );
-      gateSatisfied = computeGateSatisfied(expected, checked);
+      requiredItemsChecked = allRequiredItemsChecked(expected, checked);
     }
 
-    const pass = pr.draft || skipType || gateSatisfied;
+    const pass = pr.draft || exempt || requiredItemsChecked;
     await github.rest.repos.createCommitStatus({
       owner,
       repo,

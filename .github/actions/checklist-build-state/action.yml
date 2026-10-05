@@ -2,7 +2,7 @@ name: "Checklist: build state"
 description: >-
   Reads checklist_config.yaml from the PR base branch and reconciles it with the existing sticky
   comment (preserving ticked boxes and their inline attribution), then outputs the rendered comment
-  body and the PR Checklist gate state (head-sha, is-draft, skip-type, gate-satisfied, skip).
+  body and the PR Checklist gate state (head-sha, is-draft, exempt, required-items-checked, skip-render).
 
 inputs:
   github-token:
@@ -12,20 +12,20 @@ inputs:
 
 outputs:
   comment-body:
-    description: "Fully rendered markdown body for the sticky checklist comment. Set only when skip is 'false'."
+    description: "Fully rendered markdown body for the sticky checklist comment. Set only when skip-render is 'false'."
     value: ${{ steps.build.outputs.comment-body }}
-  skip:
+  skip-render:
     description: "'true' if the comment should not be re-rendered this run (bot self-edit, non-checklist comment edit, or exempt type)."
-    value: ${{ steps.build.outputs.skip }}
-  skip-type:
+    value: ${{ steps.build.outputs.skip-render }}
+  exempt:
     description: "'true' if the PR's merge-title type is exempt (revert/docs/ci/chore/test); the gate auto-passes."
-    value: ${{ steps.build.outputs.skip-type }}
+    value: ${{ steps.build.outputs.exempt }}
   is-draft:
     description: "'true' while the PR is a draft; the gate passes without checking item state."
     value: ${{ steps.build.outputs.is-draft }}
-  gate-satisfied:
+  required-items-checked:
     description: "'true' when every blocking checklist item is checked."
-    value: ${{ steps.build.outputs.gate-satisfied }}
+    value: ${{ steps.build.outputs.required-items-checked }}
   head-sha:
     description: "The PR head commit SHA, so the PR Checklist status is posted against the right commit."
     value: ${{ steps.build.outputs.head-sha }}
