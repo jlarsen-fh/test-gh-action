@@ -35,6 +35,7 @@ areas:
       - id: tests-edge-cases
         text: "Tests exercise the stated edge cases, not just the happy path"
         roles: [reviewer]
+        blocking: true
 
   - id: unified-frontend
     when:
