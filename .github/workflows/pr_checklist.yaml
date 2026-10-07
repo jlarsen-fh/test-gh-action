@@ -137,7 +137,7 @@ jobs:
               description = 'All required checklist items complete.';
             } else {
               state = 'failure';
-              description = 'Required checklist items still unchecked.';
+              description = 'Check the ⚠️ items in the checklist comment to pass.';
             }
 
             // Commit statuses are idempotent per context+SHA: the latest posted value wins, and this
